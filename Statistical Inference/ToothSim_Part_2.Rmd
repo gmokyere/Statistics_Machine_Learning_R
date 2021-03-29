@@ -1,0 +1,153 @@
+---
+title: "The Effect of Vitamin C on Tooth Growth"
+author: "Emmanuel Okyere Darko"
+date: "3/26/2021"
+output: statsr:::statswithr_lab
+---
+
+## Description of data
+The response is the length of odontoblasts (cells responsible for tooth growth) in 60 guinea pigs. Each animal received one of three dose levels of vitamin C (0.5, 1, and 2 mg/day) by one of two delivery methods, orange juice or ascorbic acid (a form of vitamin C and coded as VC).
+
+
+1. Load the ToothGrowth data and perform some basic exploratory data analyses
+We can also check the datatype of the variables
+```{r }
+data("ToothGrowth")
+str(ToothGrowth)
+```
+
+
+2. Provide a basic summary of the data.
+
+* We have 3 dose levels, 0.5, 1 and 2 each of 20 quantities were given
+* There are 2 delivery methods, VC and OJ, 30 of each were administered
+* Tooth length ranges from 4.2 to 33.9 with an average length of 18.81
+
+```{r }
+ToothGrowth$dose <- factor(ToothGrowth$dose)
+summary(ToothGrowth)
+```
+
+
+### Exploratory Analysis
+
+3. For every dose level, let's see how tooth leghth varies between the delivery methods.
+
+We can infer that for dose levels of `0.5` and `1`, Orange Juice (OJ) delivery resulted in longer tooth lengths that VC except for dose level `2` where VC delivery had both extreme tooth lengths.
+
+```{r}
+library(ggplot2)
+
+ggplot(ToothGrowth) +
+ aes(x = "", y = len, fill = supp) +
+ geom_boxplot() + 
+ scale_fill_hue() +
+ labs(x = "Dose levels", y = "Tooth Lenght", title = "Boxplot of Dose Levls") +
+ theme_linedraw() +
+ facet_wrap(vars(dose))
+```
+
+Check how many `Dose` were delivery via each method  
+Equal number of dose were delivered in each case as shown below
+```{r}
+table(ToothGrowth$supp, ToothGrowth$dose)
+```
+
+
+## Hypothesis Testing
+
+1. Does different supplementary delivery affect Toothgrowth?
+I will conduct a hypothesis test to answer this question. since the variables are independent, I'll specify `paired = F`
+
+```{r}
+with(ToothGrowth, t.test(len~supp, alternative = "two.sided", paired = F))
+```
+
+Here `H0: There's no difference in average tooth-length of supplemetary delivery`. Since the CI ` -0.1710156  7.5710156` contains `zero` and also the p-value: `.006` is greater that alpha of `.5`, we fail to reject the null hypothesis in favor of `H0`
+
+
+2.  tooth-length vs Dose levels
+
+I will create a utility function to subset data
+
+```{r}
+tooth_sub <- function(sub){
+        return(subset(ToothGrowth, dose %in% sub))
+        }
+
+
+Dose_05_10 <- tooth_sub(c(0.5, 1))
+Dose_05_20 <- tooth_sub(c(0.5, 2))
+Dose_10_20 <- tooth_sub(c(1, 2))
+
+Dose_05 <- tooth_sub(c(0.5))
+Dose_10 <- tooth_sub(c(1))
+Dose_20 <- tooth_sub(c( 2))
+```
+
+
+3. How does average tooth-growth differ in Dose level `.5` and `1`
+
+```{r}
+with(Dose_05_10, t.test(len~dose, alternative = "two.sided", paired = F))
+```
+
+Here `H0: There's no difference between dose level .5 average tooth-length and dose level 1`. Since the CI does not contain zero and also the p-value is less than alpha of .5, we reject the null hypothesis in favor of Ha and conclude average Tooth-growth differ
+
+
+4. How does average tooth-growth differ in Dose level `.5` and `2`
+
+```{r}
+with(Dose_05_20, t.test(len~dose, alternative = "two.sided", paired = F))
+```
+
+Here `H0: There's no difference between dose level .5 average tooth-length and dose level 2`. Since the CI does not contain zero and also the p-value is less than alpha of .5, we again reject the null hypothesis in favor of Ha and conclude average Tooth-growth differ
+
+
+3. How does average tooth-growth differ in Dose level `.5` and `1`
+
+```{r}
+with(Dose_10_20, t.test(len~dose, alternative = "two.sided", paired = F))
+```
+
+Here `H0: There's no difference between dose level 1 average tooth-length and dose level 2`. Since the CI does not contain zero and also the p-value is less than alpha of .5, we reject the null hypothesis in favor of Ha and conclude average Tooth-growth differ
+
+
+
+#### For each dose level, how does tooth-growth differ among suplementary delivery?
+Here `H0: There's no difference in average tooth-length of supplemetary delivery` for all 3 cases
+
+1. Does `.5`   
+The p-value: is less than alpha of .5, we reject the null hypothesis in favor of Ha and conclude average Tooth-growth differ
+
+```{r}
+with(Dose_05, t.test(len~supp, alternative = "two.sided", paired = F))
+```
+
+
+2. Does `1`  
+The p-value: is less than alpha of .5, we reject the null hypothesis in favor of Ha and conclude average Tooth-growth differ
+
+```{r}
+with(Dose_10, t.test(len~supp, alternative = "two.sided", paired = F))
+```
+
+3. Does `2`   
+The p-value: is greater than alpha of `.5`, we fail to reject the null hypothesis conclude average Tooth-growth does not differ
+
+```{r}
+with(Dose_20, t.test(len~supp, alternative = "two.sided", paired = F))
+```
+
+
+## Asumptions
+* The sample, in particular guinea pigs is a representative of the population of guinea pigs. This assumption allows us to generalize results
+
+* Guinea pigs were randomly assigned to different levels of dose levels and delivery methods to take care of noise
+
+
+## Conclusion
+* Supplementary delivery alone has no effect on the average tooth growth
+* For dose levels of `0.5` and `1`, Orange Juice (OJ) delivery resulted in longer tooth lengths that VC except for dose level `2` where VC delivery had both extreme tooth lengths.
+
+* Tooth growth differ between each two dose levels, thus increase in dose level results in increased tooth length
