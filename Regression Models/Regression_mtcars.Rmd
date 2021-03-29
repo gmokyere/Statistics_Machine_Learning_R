@@ -1,0 +1,146 @@
+---
+title: "Regression_Mtcars"
+author: "Emmanuel Okyere Darko"
+date: "3/28/2021"
+output: statsr:::statswithr_lab
+---
+
+## Excutive Summary
+
+This project will focus on a data collection of cars, exploring the relationship
+between a set of variables and miles per gallon (MPG) as outcome variable.
+Interested questions for this project are 
+
+* Is automatic or manual transmission better for MPG?
+* Quantify the MPG difference between manual and automatic transmission
+
+1. Data Description
+A data frame with 32 observations on 11 (numeric) variables.
+
+* [, 1]	mpg	Miles/(US) gallon
+* [, 2]	cyl	Number of cylinders
+* [, 3]	disp	Displacement (cu.in.)
+* [, 4]	hp	Gross horsepower
+* [, 5]	drat	Rear axle ratio
+* [, 6]	wt	Weight (1000 lbs)
+* [, 7]	qsec	1/4 mile time
+* [, 8]	vs	Engine (0 = V-shaped, 1 = straight)
+* [, 9]	am	Transmission (0 = automatic, 1 = manual)
+* [,10]	gear	Number of forward gears
+* [,11]	carb	Number of carburetors
+
+```{r libraries, warning=FALSE, echo=FALSE}
+library(ggplot2)
+library(datasets)
+data("mtcars")
+```
+
+## Exploratory Analysis
+
+```{r cars}
+str(mtcars)
+```
+
+1. Change data types
+* Cylinder is a count variable, therefore convert to factor `4, 6 or 8`
+* gear also as factor varible (3,4 or 5)
+* Transmission (am) as factor - `(0 = automatic, 1 = manual)`
+
+```{r }
+mtcars[,c(2,9,10)] <- sapply(mtcars[,c(2,9,10)] , factor)
+
+```
+
+Since there are no complete overlaps in the boxplot below, Transmission type
+appears to have better relationship with mpg
+
+```{r }
+with(mtcars, boxplot(mpg~am))
+```
+
+## Model
+
+1. We will fit a linear linear model with only cylinder as the predictor varible  
+Transmission (am) as factor - `(0 = automatic, 1 = manual)`  
+
+```{r }
+fit.cyl <- lm(mpg~am, data= mtcars)
+summary(fit.cyl)
+```
+
+Transimission type is a significant predictor of MPG with based on the p-values. Automatic transmission 
+appears to consume fewer MPG with Manual transmission expected consume and 7.2 more gallons per 1 mile.
+However, the low R-Squared shows that approximately `36%` of the variation in the model is explained by 
+the Transmission variable and our co-efficients may not be reliable.
+
+
+2. Let's compare this to a full model
+
+```{r }
+fit.full <- lm(mpg~., data= mtcars)
+summary(fit.full)
+```
+
+The full model gives a relatively high Adjusted R-squared `88.5%` but has less significant variables,
+implying that there could be overfitting.
+
+
+3. Selecting the best model
+All numerical variables have at least moderate correlation with mpg
+```{r}
+library(GGally)
+df_cor <- na.omit(mtcars[, c(1,3:8,11)])
+ggcorr(df_cor, label = T)
+```
+
+We can use the step fubction to select the best model, we will use backward 
+stepwise regression, removing one variable a time untill we reach the best model (when AIC stops
+decreasing)
+
+```{r}
+# To see output, specify trace = True
+fit.best <- step(fit.full, direction = "backward", trace = F)
+summary(fit.best)
+
+```
+
+Based on the AIC, the best model has predictors: `wt, am, qsec`
+Now we can fit a parsimonious model. This model now gives a Adjusted Rsq of 83.3 with a low
+p-value indicatiing the model significance.
+
+
+5. Hypothesis test for model selection
+This test also suggest that the best.fit model is significant than the full model
+```{r}
+anova(fit.cyl, fit.best, fit.full)
+```
+
+### Model Diagnoistics
+
+* The model diagnostics shows that the best fit model has linear pattern, indicating the linearity 
+was captured by the mode
+* residuals appear normaly distributed as shows on the Normal-Q-Q plot as well
+* The Scale-Location shows that the best fit model has approximately constant variance  
+* Residual vs Leverage captures influetial points, in particular, there is no outliers in our model
+
+<a href = 'https://data.library.virginia.edu/diagnostic-plots/'> You can read more here </a>
+
+```{r}
+par(mfrow = c(2,2))
+plot(fit.best)
+```
+
+Sum of residual is also zero, all assumptions for a linear regression are adequately satisfied
+```{r}
+sum(fit.best$residuals)
+```
+
+
+## Conclusion
+* Is automatic or manual transmission better for MPG?
+This question can be answered based on the model, that Automatic transmission 
+appears to consume fewer MPG with Manual transmission expected consume additional 2.9 MPG
+
+* Quantify the MPG difference between manual and automatic transmission could be hard to answer as different models could predict different results
+
+
