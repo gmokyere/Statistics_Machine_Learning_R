@@ -1,2 +1,2 @@
-# Statistics_Machine_Learning_R
+# Statistics and Machine Learning in R
 JohnHopkins Coursera
