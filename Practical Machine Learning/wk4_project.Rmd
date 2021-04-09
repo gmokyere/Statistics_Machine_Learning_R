@@ -1,0 +1,286 @@
+---
+title: "Weight Exsercise Prediction"
+author: "Emmanuel Okyere Darko"
+date: "4/5/2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+## Executive Summary
+ In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which an exercise is done.
+ 
+ In particular, we will:  
+ 
+1. Get and clean the data set:
+  * Train data is from <a href = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'> here </a>   
+  * Test data is found at <a href ='https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv' > here </a>   
+
+2. Perform Exploratory data analysis to identify patterns
+3. Pre-process data to split and validate, reduce dimentionality with PCA and remoe zero covariates 
+4. Fit models on different predictors
+5. Assess model metrics 
+6. Summary
+
+
+## Getting and Cleaning Data
+
+```{r , warning=FALSE, message=FALSE, echo=FALSE}
+set.seed(3433)
+library(caret)
+#library(gbm)
+library(graphics)
+library(ggplot2)
+library(GGally)
+library(tidyverse)
+
+```
+
+#### Data 
+```{r , cache=TRUE}
+
+df.train <-read.csv('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv')
+
+df.test <- read.csv('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv')
+
+dim(df.train)
+
+```
+
+#### Data Cleaning
+
+Checking for NAs, it looks like some columns have NAs of more than `50%` the 
+size of the dataset, therefore columns with NAs more than `20%` of the size of the data will be 
+droped, which then reduce the number of columns. Also we will remove timestamp
+columns since we don't need them as prediction
+
+```{r, cache=TRUE}
+size <- nrow(df.train)
+perc <- 20
+Na_thresh <- floor(size/100 * perc)
+
+## Drop columns with more than 20% na
+dropped_cols <- which(colSums(is.na(df.train) | df.train == "") > Na_thresh)
+
+train_val_set <- df.train[, -c(1, dropped_cols)]
+test_set <- df.test[, -c(1, dropped_cols)]
+
+## Drop all columns having timestamp
+dropped_time_cols <- grep('timestamp', names(train_val_set))
+train_val_set <- train_val_set[, -dropped_time_cols]
+test_set <- test_set[, -dropped_time_cols]
+
+## Make classe a factor
+train_val_set$classe <- factor(train_val_set$classe)
+train_val_set$user_name <- factor(train_val_set$user_name)
+test_set$user_name <- factor(test_set$user_name)
+
+```
+
+
+#### Split training set to train and validation
+`3/4` for training and `1/4` for validation
+```{r}
+partition <- createDataPartition(y = train_val_set$classe, p = 3/4, list = F)
+
+train_data <- train_val_set[partition, ]
+validation_data <- train_val_set[-partition, ]
+
+response <- which(names(train_data) == c("classe"))
+
+```
+
+## Exploratory Analysis
+
+#### Removing zero covariates
+zero or near zero covariates predictors will be removed
+```{r}
+nsv <- nearZeroVar(train_data, saveMetrics=TRUE)
+
+train_data = train_data[, !nsv$nzv]
+validation_data = validation_data[, !nsv$nzv]
+test_set = test_set[, !nsv$nzv]
+
+nsv
+```
+
+#### Check for correlation between predictors and response variable
+The table below shows all variables have less correlation with the response varible
+```{r, echo=T, cache=T, eval=FALSE}
+
+## Remove non numeric columns before calculating correlation
+df <- train_data %>% select(-c("user_name", "classe"))
+
+corr <- cor(df, as.numeric(train_data$classe))
+
+## Convert to dataframe and arrange in decreasing order
+coor_df = data.frame(name= row.names(corr) ,pos_cor = abs(corr))
+coor_df[coor_df$pos_cor >0.3,]
+
+```
+
+
+We can now visualize this for a better pespertive
+```{r,  cache=TRUE, echo=FALSE}
+# Interactive tool for ggplot
+#library(esquisse)
+# esquisser()
+
+g1 <- ggplot(train_data) +
+ aes(x = user_name, y = pitch_forearm, fill = classe) +
+ geom_boxplot()  +
+ scale_fill_hue() +
+ theme_gray()  +
+ theme(legend.position = "top")
+
+g1
+```
+
+#### Plot with points overlayed
+This plot shows the number of data-points in each category of user-name, it can be inferred that each
+person is well represented in the dataset
+```{r,  cache=TRUE, echo=FALSE}
+
+g2 <- ggplot(train_data) +
+ aes(x = user_name, y = pitch_forearm, fill = classe) +
+ geom_boxplot()  + geom_jitter()+
+ scale_fill_hue() +
+ theme_gray()  +
+ theme(legend.position = "top")
+
+g2
+
+```
+
+
+
+#### Check for correlation between predictors 
+This plot is not very informational as we have several variable but we can infer that some variables are strongly correlated with others
+```{r, echo=F}
+
+#drop_cols <- which(names(train_data) == c("new_window"))
+
+df <- train_data %>% select(-c("user_name", "classe"))
+ggcorr(df)
+```
+
+Now is a better tim to eliminate highly correlated columns
+```{r}
+high_cor = findCorrelation(cor(df), cutoff = 0.8)
+
+exclude_cols = c(response, high_cor)
+
+```
+
+## Pre-processing for training
+To reduce overfitting and also dimentionality, we will use PCA with a thresh of `0.9`
+
+```{r pre-processing}
+## USe pca to reduce highly correlated variables
+pca.all <- preProcess(train_data[, -response], method = 'pca', thresh = 0.9)
+train_data.pca.all <- predict(pca.all, train_data[, -response])
+validation_data.pca.all <- predict(pca.all, validation_data[, -response])
+test_set.pca.all <- predict(pca.all, test_set[, -response])
+
+## remove highly correlated columns and fit pca  
+pca.excluded <- preProcess(train_data[, -exclude_cols], method = 'pca', thresh = 0.9)
+train_data.pca.excluded <- predict(pca.excluded, train_data[, -exclude_cols])
+validation_data.pca.excluded <- predict(pca.excluded, validation_data[, -exclude_cols])
+#test_set.pca.excluded <- predict(pca.excluded, test_set[, -exclude_cols])
+```
+
+
+## Model
+
+* Before pca model 
+The next model will be fit on predictors after removing highly correlated
+variables.
+
+* The train function takes a almost `10x` time to train relative to the specific `randomForest function`
+but highly efficient. 
+```{r, cache=TRUE, echo=FALSE}
+
+## Train model on different algorithmns
+
+#start.all <- proc.time()
+#fit.rf.all <- train(y = train_data$classe, x = train_data[, -response], method = 'rf')
+#proc.time() - start.all 
+
+#start.excluded <- proc.time()
+#fit.rf.excluded <- train(y= train_data$classe , x = train_data[, -exclude_cols], method = 'rf')
+#start.excluded - proc.time()
+```
+  
+  
+   user   system  elapsed 
+3955.071   67.123 4067.016 
+
+```{r train, cache=TRUE}
+
+rf.all <- randomForest::randomForest(x = train_data[, -response], y = train_data$classe,
+                                 ntree = 100, 
+                                  ytest =validation_data$classe, xtest = validation_data[, -response])
+
+rf.excluded <- randomForest::randomForest(x = train_data[, -exclude_cols], y = train_data$classe,
+                                 ntree = 100,
+                                  ytest =validation_data$classe, xtest = validation_data[, -exclude_cols])
+
+rf.pca <- randomForest::randomForest(x = train_data.pca.all, y = train_data$classe,
+                                 ntree = 200,
+                                 xtest =validation_data.pca.all, ytest =validation_data$classe )
+
+rf.pca.excluded <- randomForest::randomForest(x = train_data.pca.excluded, y = train_data$classe,
+                                 ntree = 200,  ytest =validation_data$classe ,
+                                 xtest = validation_data.pca.excluded)
+
+
+```
+
+```{r pred, eval=F, echo=FALSE}
+#### Predict
+
+pred.rf.all <- predict(rf.all, validation_data[, -response])
+pred.rf.excluded <- predict(rf.excluded, validation_data[, -exclude_cols])
+pred.rf.pca <- predict(rf.pca, validation_data.pca.all)
+pred.rf.pca.excluded <- predict(rpart.pca.excluded, validation_data.pca.excluded,type = "class")
+```
+
+
+## Metrics
+#### Train Accuracy
+```{r train_acc, cache=TRUE}
+rf1 = round(1 - sum(rf.all$confusion[, "class.error"]), 3)
+rf2 = round(1 - sum(rf.excluded$confusion[, "class.error"]), 3)
+rf3 = round(1 - sum(rf.pca$confusion[, "class.error"]), 3)
+rf4 = round(1 - sum(rf.pca.excluded$confusion[, "class.error"]), 3)
+
+
+print(paste("All Predictors acc:", rf1, "Predictors with no high cor acc: ", rf2,
+            "PCA acc: ", rf3, "PCA with high corr removed acc:", rf4 ))
+```
+
+#### Validation Accuracy
+````{r val_acc}
+cm.1 <- round(1 - sum(rf.all$test$confusion[, "class.error"]), 3)
+cm.2 <- round(1 - sum(rf.excluded$test$confusion[, "class.error"]), 3)
+cm.3 = round(1 - sum(rf.pca$test$confusion[, "class.error"]), 3)
+cm.4 = round(1 - sum(rf.pca.excluded$test$confusion[, "class.error"]), 3)
+
+#round(confusionMatrix(validation_data$classe, pred.rf.pca.excluded)$overall[1] , 3)
+
+
+print(paste("All Predictors acc:", cm.1, "Predictors with no high cor acc: ", cm.2,
+            "PCA acc: ", cm.3, "PCA with high corr removed acc:", cm.4 ))
+```
+
+## Summary
+
+* PCA reduces computational time and also gives a good parsimonious model
+* Train function is over `10x` slower than specific function `randomForest`
+* Removing highly correlated predictors before PCA does not change model performance significantly as
+PCA takes care of the same thing
+* An Accuracy of `99.7%` and `87%` was achieved on validation set using all predictors and
+PCA respectively
+
+
