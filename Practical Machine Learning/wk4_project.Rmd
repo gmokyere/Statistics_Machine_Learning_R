@@ -2,10 +2,8 @@
 title: "Weight Exsercise Prediction"
 author: "Emmanuel Okyere Darko"
 date: "4/5/2021"
-output:
-  pdf_document: default
-  html_document:
-    df_print: paged
+output: statsr:::statswithr_lab
+
 ---
 
 ## Executive Summary
