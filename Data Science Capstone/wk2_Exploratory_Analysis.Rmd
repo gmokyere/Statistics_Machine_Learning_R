@@ -1,0 +1,250 @@
+---
+title: "Week 2 Exploratory Analysis of SwiftKey data"
+author: "Emmanuel Okyere Darko"
+date: "4/15/2021"
+output: statsr:::statswithr_lab
+---
+
+## Executive Summary
+As new phones or electronics emerges, the need for completing task quickly is also rising. `Swiftkey` is a leading keyboard text prediction that predicts the next word or next phrase when one starts typing. The goal of this project is to predict a possible next word as users start typing in order to suggest or improve typing speed using `SwiftKey` data. This report mainly focuses of the Exploratory Analysis of the data to develop insight about the data. link for full code can be accessed here: 
+<a href =
+"https://github.com/gmokyere/Statistics_Machine_Learning_R/tree/main/Data%20Science%20Capstone
+" >My github </a>
+
+
+1. In summary,  
+- The number of `words` in each subject file will be found
+- The number of `lines` in each subject file will be found
+- The longest line of words in each subject file will be found
+- Most Frequent words used
+
+
+## Libraries
+```{r, cache=TRUE, warning=FALSE, message=FALSE}
+# NLP tools
+library("R.utils")
+library(NLP)
+library(tm)
+
+## Visualization
+library(cowplot) #multi panel plot
+library(ggplot2)
+library("wordcloud") # word-cloud generator 
+library(plotly) #interactive plot
+
+## Text cleaning
+library(stringr); library("tidytext")
+
+## For messy data cleaning
+library(dplyr); library(tidyverse)
+
+
+set.seed(2222)
+```
+
+## Getting data
+
+This dataset was downloaded from , a leading keyboard text prediction, through `Coursera` Data Science Capstone by John Hopkins University here 
+<a href = "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip" > Data </a>
+
+
+
+```{r, cache=TRUE, eval=FALSE}
+data_folder <- "Data"
+zip_url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+zip_name <- "Coursera-SwiftKey.zip"
+download_path <- paste(getwd(), zip_name, sep = "/")
+
+if (!file.exists(download_path)){
+  download.file(url, destfile=download_path, method="curl")
+}
+unzip(zipfile=download_path, exdir=data_folder) ##extracted folder is "final"
+
+```
+
+
+## Exploratory Analysis
+
+Read all text files in a particular language directory, find the number of lines in each,
+the longest line of words and number of words in each subject line. 
+
+```{r data, warning=FALSE, cache=TRUE}
+flist <- list.files("Data/final", pattern = ".*en_.*.txt", recursive = T)
+
+get_info <-lapply(paste("Data", flist, sep = "/"), function(filename){
+      ## Check file size 
+      fsize = file.size(filename)[1]/1024/1024
+      
+      ## Read subset of data
+      con <- file(filename, "r") #open connection
+      all_lines = readLines(con)
+      #readLines(con, 5) ## read first 5 lines
+      
+      ## check number of lines in the file 
+      #NROW(readLines(con_en_us_twitter))
+      nlines <- sapply(filename, countLines)
+      
+      ##longest line 
+      nchars = lapply(all_lines, nchar)
+      longest_line <- which.max(nchars) ## determine index of max
+      
+      ## split based on one or more white spaces and find length
+      nwords <- sum(sapply(strsplit(all_lines, "\\s+"), length)) 
+      
+      close(con)
+      return(c(filename, round(as.numeric(fsize),2), nlines, longest_line, nwords))
+})
+
+```
+
+#### Neatly convert list to dataframe and visualize
+
+```{r df}
+us_df <- data.frame(matrix(unlist(get_info), nrow=length(get_info), byrow=T))
+colnames(us_df) <- c("file", "fsize", "num_of_lines", "longest_line", "nwords")
+us_df
+```
+
+### Summary Statistics
+
+#### Word counts, line counts and longest line in each US file 
+1. It is quite interesting to see that US blogs have number of lines than news and twitter but have the 
+highest number of words relative to US news and Twitter. It is also not a surprise to see blogs have the 
+longest line of words than in Twitter and News as show in the plot below.
+
+```{r plot, cache=TRUE, echo= FALSE}
+g1 <- ggplot(us_df) +
+ aes(x = file, fill = file, weight = as.numeric(nwords)) +
+ geom_bar() +  coord_flip() +
+ scale_fill_hue() +
+ labs(title = "Number of words in US each Text") +
+ theme_minimal()  + theme(legend.position = "none")
+
+g2 <- ggplot(us_df) +
+ aes(x = file, fill = file, weight = as.numeric(longest_line)) +
+ geom_bar() +  coord_flip() +
+ scale_fill_hue() +
+ labs(title = "Longest line of words in US each Text") +
+ theme_dark() + theme(legend.position = "none")
+
+## Number of Lines in each US Text
+g3 <- ggplot(us_df) +
+ aes(x = file, fill = file, weight = as.numeric(num_of_lines)) +
+ geom_bar() +  coord_flip() +
+ scale_fill_hue() +
+ labs(title = "Number of Lines in US each Text") +
+ theme_gray()  + theme(legend.position = "none")
+
+## Plot graphs on multiple panel 
+grid.arrange(g1, g2, g3, nrow=3)
+
+```
+
+
+#### Word Frequencies
+2. Given the huge amount of dataset we hav, we will only sample `10%` of the data to explore
+
+```{r count, cache= TRUE, warning=FALSE, message=FALSE}
+
+count_words_l <- lapply(paste("Data/final", flist, sep = "/"), function(path){
+      ## REad file
+      #path = "Data/en_US/en_US.blogs.txt"
+      con <- file(path, "r") # open connection
+      all_lines = readLines(con)
+      
+      close(con) #connection
+      
+      ## number of lines
+      nlines = sapply(path, countLines)
+      
+      ## Sample 10% of words 
+      sub_lines <- all_lines[sample(1:nlines, nlines*0.1, replace = FALSE)] 
+      
+      #remove paragraphs
+      sub_lines <- paste(all_lines, collapse = " ") %>% stringr::str_replace_all(pattern = "\n", replacement = "")
+            
+      text_df <- tibble(Text = sub_lines) ## put nealty into a df
+      text_words <- text_df %>% unnest_tokens(output = word, input = Text) # make each row per word
+      
+      ## Remove stop words
+      data("stop_words")
+      text_words <- text_words %>% anti_join(stop_words)
+      
+      ##check for most frequent words
+      count_words <- text_words %>% count(word, sort = TRUE)
+      return(count_words)
+})
+```
+
+### Word cloud
+1. From left to right, Blogs, News, Twitter. As seen from below, US Blogs mostly frequent words are` time, love and people`; News words are more about `schools, county and city`, while most words used on Twitter are `follow, people, night, weekend` 
+
+```{r wordcloud, cache=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
+
+par(mfrow=c(1,3))
+for (i in 1:length(count_words_l)) {
+      wordcloud(count_words_l[[i]]$word, freq = count_words_l[[i]]$n, 
+                colors=brewer.pal(8, "Dark2"), max.words = 100)
+}
+
+```
+
+
+# Frequent  words
+```{r, cache=TRUE}
+topn <- 20
+### GGplot summary
+top_n_words_blogs <- count_words_l[[1]] %>% filter(n>count_words_l[[1]]$n[topn]) %>%
+                  mutate(word = reorder(word, n))
+
+top_n_words_news <- count_words_l[[2]] %>% 
+                  filter(n>count_words_l[[2]]$n[topn]) %>% mutate(word = reorder(word, n))
+
+top_n_words_tweet <- count_words_l[[3]] %>%
+                  filter(n>count_words_l[[1]]$n[topn]) %>% mutate(word = reorder(word, n))
+```
+
+#### Plot of top20 words
+
+```{r top20_plot, cache=TRUE, echo=FALSE, eval=T}
+
+## Most Frequent words in US blogs
+gg1 <- ggplot(top_n_words_blogs) +
+       aes(x = word, fill = n, weight = n) +
+       geom_bar() +
+       scale_fill_gradient() +
+       labs(x = "Words", y = "Counts", title = "Most Frequent words in US blogs") +
+       coord_flip() +
+       theme_dark() 
+
+## News
+gg2 <- ggplot(top_n_words_news) +
+       aes(x = word, fill = n, weight = n) +
+       geom_bar() +
+       scale_fill_gradient() +
+       labs(x = "Words", y = "Counts", title = "Most Frequent words in US News") +
+       coord_flip() +  theme_gray()
+
+# Twitter
+gg3 <- ggplot(top_n_words_tweet) +
+       aes(x = word, fill = n, weight = n) +
+       geom_bar() +
+       scale_fill_gradient() +
+       labs(x = "Words", y = "Counts", title = "Most Frequent words in US Twitter") +
+       coord_flip() +  theme_gray()
+
+
+gg1
+gg2
+gg3
+```
+
+## Summary
+
+- Us blogs highest number of words and longest line of sentence relative to US news and Twitter. Twitter does not use long line of sentences.
+
+- US News write more lines than blogs and twitter
+
+- US Blogs focuses more on  words such as` time, love and people`; News words are more about `schools, county and city`, while most words used on Twitter are `follow, people, night, weekend`
+
+6. Note that al codes to generate plot are not echoed for a neat presentation, you can follow the github link above for full code, cheers :)
