@@ -71,7 +71,7 @@ the longest line of words and number of words in each subject line.
 ```{r data, warning=FALSE, cache=TRUE}
 flist <- list.files("Data/final", pattern = ".*en_.*.txt", recursive = T)
 
-get_info <-lapply(paste("Data", flist, sep = "/"), function(filename){
+get_info <-lapply(paste("Data/final", flist, sep = "/"), function(filename){
       ## Check file size 
       fsize = file.size(filename)[1]/1024/1024
       
@@ -161,7 +161,7 @@ count_words_l <- lapply(paste("Data/final", flist, sep = "/"), function(path){
       sub_lines <- all_lines[sample(1:nlines, nlines*0.1, replace = FALSE)] 
       
       #remove paragraphs
-      sub_lines <- paste(all_lines, collapse = " ") %>% stringr::str_replace_all(pattern = "\n", replacement = "")
+      sub_lines <- sub_lines %>% stringr::str_replace_all(pattern = "\n", replacement = "")
             
       text_df <- tibble(Text = sub_lines) ## put nealty into a df
       text_words <- text_df %>% unnest_tokens(output = word, input = Text) # make each row per word
@@ -248,3 +248,34 @@ gg3
 - US Blogs focuses more on  words such as` time, love and people`; News words are more about `schools, county and city`, while most words used on Twitter are `follow, people, night, weekend`
 
 6. Note that al codes to generate plot are not echoed for a neat presentation, you can follow the github link above for full code, cheers :)
+
+## Modelling
+```{r}
+
+### N-Grams
+
+## REad file
+#path = "Data/en_US/en_US.blogs.txt"
+con <- file(paste("Data/final", flist[1], sep = "/"), "r") # open connection
+all_lines = readLines(con)
+
+close(con) #connection
+
+## number of lines
+nlines = sapply(paste("Data/final", flist[1], sep = "/"), countLines)
+
+## Sample 10% of words 
+sub_lines <- all_lines[sample(1:nlines, nlines*0.1, replace = FALSE)] 
+
+sub_lines <- sub_lines %>% stringr::str_replace_all(pattern = "\n", replacement = "")
+
+text_df <- tibble(Text = sub_lines) ## put neatly into a df
+
+```
+
+7. Note that the grams overlap, a neat way to 
+```{r}
+n_gram <- text_df %>% unnest_tokens(output = word, input = Text, token = "ngrams", n= 3) 
+n_gram 
+
+```

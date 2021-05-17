@@ -1,0 +1,241 @@
+---
+title: "Modelling"
+author: "Emmanuel Okyere Darko"
+date: "4/18/2021"
+output: statsr:::statswithr_lab
+runtime: shiny
+---
+
+## Libraries
+```{r, cache=TRUE, warning=FALSE, message=FALSE}
+# NLP tools
+library("R.utils")
+library(NLP)
+library(tm)
+library(sbo) ##predictive model
+
+## Visualization
+library(cowplot) #multi panel plot
+library("wordcloud") # word-cloud generator 
+library(plotly) #interactive plot
+library(ggplot2)
+
+## Text cleaning
+library(stringr); library("tidytext")
+
+## For messy data cleaning
+library(dplyr); library(tidyverse)
+
+
+
+set.seed(2222)
+```
+
+
+## Getting and Sampling Data
+
+```{r data, eval=FALSE, cache=TRUE}
+## Get all 3  files
+flist <- list.files("Data/final", pattern = ".*en_.*.txt", recursive = T)
+
+files <- paste("Data/final", flist, sep = "/")
+
+## REad data
+blogs <- readLines(files[1], skipNul = TRUE) 
+news <- readLines(files[2],  skipNul = TRUE) 
+twitter <- readLines(files[3],  skipNul = TRUE) 
+
+## Convert to dataframe
+blogs <- data.frame(text = blogs)
+news <- data.frame(text = news)
+twitter <- data.frame(text = twitter)
+
+### SAmple 
+perc <- 0.05
+blogs_samp <- blogs %>% sample_n(nrow(blogs)*perc)
+news_samp <- news %>% sample_n(nrow(news)*perc)
+twitter_samp <- twitter %>% sample_n(nrow(twitter)*perc)
+
+
+## Bind 
+all_sample <- bind_rows(mutate(blogs_samp, source = "blogs"),
+                         mutate(news_samp,  source = "news"),
+                         mutate(twitter_samp, source = "twitter")) 
+
+all_sample$source <- as.factor(all_sample$source)
+
+```
+
+## Remove stopwords 
+```{r stopwords, eval=F}
+
+replace_reg <- "[^[:alpha:][:space:]]*"
+replace_url <- "http[^[:space:]]*"
+replace_aaa <- "\\b(?=\\w*(\\w)\\1)\\w+\\b" 
+
+clean_sample <-  all_sample %>%
+  mutate(text = str_replace_all(text, replace_reg, "")) %>%
+  mutate(text = str_replace_all(text, replace_url, "")) %>%
+  mutate(text = str_replace_all(text, replace_aaa, "")) %>% 
+  mutate(text = iconv(text, "ASCII//TRANSLIT"))
+
+```
+
+## Create ngrams
+```{r grams, eval=F}
+
+data("stop_words")
+
+uni_gram <- clean_sample %>% unnest_tokens(output = word, input = text, token = "ngrams", n= 1)  %>%
+            anti_join(stop_words)
+
+bi_gram <- clean_sample %>% unnest_tokens(output = word, input = text, token = "ngrams", n= 2) 
+
+tri_gram <- clean_sample %>% unnest_tokens(output = word, input = text, token = "ngrams", n= 3) 
+
+quad_gram <- clean_sample %>% unnest_tokens(output = word, input = text, token = "ngrams", n= 4) 
+
+
+## Top 50
+
+unigram_50 <- uni_gram %>%
+         ## Top 50%
+        count(word) %>%  
+        mutate(proportion = n / sum(n)) %>%
+        arrange(desc(proportion)) %>%  
+        mutate(cdf = cumsum(proportion)) %>%
+        filter(cdf <= 0.5) 
+
+bigram_50 <- bi_gram %>%
+      ## Top 50%
+        count(word) %>%  
+        mutate(proportion = n / sum(n)) %>%
+        arrange(desc(proportion)) %>%  
+        mutate(cdf = cumsum(proportion)) %>%
+        filter(cdf <= 0.5) %>%
+         ## Split 
+        separate(word, c("word1", "word2"), sep = " ")
+
+trigram_50 <- tri_gram %>%
+      ## Top 50%
+        count(word) %>%  
+        mutate(proportion = n / sum(n)) %>%
+        arrange(desc(proportion)) %>%  
+        mutate(cdf = cumsum(proportion)) %>%
+        filter(cdf <= 0.5) %>%
+         ## Split 
+       separate(word, c("word1", "word2", "word3"), sep = " ")
+
+quadgram_50 <- quad_gram %>%
+         ## Top 50%
+        count(word) %>%  
+        mutate(proportion = n / sum(n)) %>%
+        arrange(desc(proportion)) %>%  
+        mutate(cdf = cumsum(proportion)) %>%
+        filter(cdf <= 0.5) %>%
+         ## Split 
+         separate(word, c("word1", "word2", "word3", "word4"), sep = " ")
+
+
+## Save words for predictions
+saveRDS(unigram_50, "Data/clean/uni_words.rds")
+saveRDS(bigram_50, "Data/clean/bi_words.rds")
+saveRDS(trigram_50, "Data/clean/tri_words.rds")
+saveRDS(quadgram_50, "Data/clean/quad_words.rds")
+
+```
+
+What does the distribution of ngrams look like?
+
+```{r, eval=T}
+unigram_50 <- readRDS("Data/clean/uni_words.rds")
+bigram_50 <- readRDS("Data/clean/bi_words.rds")
+trigram_50 <- readRDS("Data/clean/tri_words.rds")
+quadgram_50 <- readRDS("Data/clean/quad_words.rds")
+
+disty = data.frame(ngram = c(rep("bigrams",   nrow(bigram_50)),
+                             rep("trigrams",  nrow(trigram_50)),
+                             rep("quadgrams", nrow(quadgram_50))), 
+                   number = c(bigram_50$n, trigram_50$n, quadgram_50$n))
+
+disty$ngram <- as.factor(disty$ngram)
+ggplot(data = disty, aes(y = number, x = ngram)) + geom_boxplot() + scale_y_log10()
+
+
+```
+
+## Prediction
+
+```{r}
+
+bigram_pred <- function(input_words){
+            num <- length(input_words) %>% 
+              filter(bigram_50, word1 == input_words[num]) %>%
+           ## pic top word
+           top_n(1, n) %>%
+              filter(row_number() == 1L ) %>%
+           select(num_range("word", 2)) %>% 
+           as.character(0) -> out
+           ifelse(out=="character(0)", "?", return(out))
+      
+}
+
+trigram_pred <- function(input_words){
+                    num <- length(input_words)
+                    filter(trigram_50, 
+                            word1==input_words[num-1], 
+                            word2==input_words[num])  %>% 
+                    top_n(1, n) %>%
+                    filter(row_number() == 1L) %>%
+                    select(num_range("word", 3)) %>%
+                    as.character() -> out
+                    ifelse(out=="character(0)", bigram_pred(input_words), return(out))
+}
+
+quadgram_pred <- function(input_words){
+                    num <- length(input_words)
+                    filter(quadgram_50, 
+                            word1==input_words[num-2], 
+                            word2==input_words[num-1], 
+                            word3==input_words[num])  %>% 
+                    top_n(1, n) %>%
+                    filter(row_number() == 1L) %>%
+                    select(num_range("word", 4)) %>%
+                    as.character() -> out
+                    ifelse(out=="character(0)", trigram_pred(input_words), return(out))
+}
+
+
+ngrams <- function(input){
+          # Create a dataframe
+          input <- data.frame(text = input)
+          # Clean the Inpput
+          replace_reg <- "[^[:alpha:][:space:]]*"
+          input <- input %>%
+            mutate(text = str_replace_all(text, replace_reg, ""))
+          # Find word count, separate words, lower case
+          input_count <- str_count(input, boundary("word"))
+          input_words <- unlist(str_split(input, boundary("word")))
+          input_words <- tolower(input_words)
+          # Call the matching functions
+          out <- ifelse(input_count == 1, bigram_pred(input_words), 
+                      ifelse (input_count == 2, trigram_pred(input_words), quadgram_pred(input_words)))
+          # Output
+          return(out)
+}
+```
+
+1. Example
+```{r}
+ngrams("I")
+```
+
+```{r, echo = FALSE}
+dir <- "/Users/billy/Desktop/R/JohnHopkins_Projects_Coursera/Data Science Capstone/WordPrediction"
+
+shinyAppDir(
+  system.file(dir, package="shiny"),
+  options = list(width = "100%", height = 700)
+)
+```
+

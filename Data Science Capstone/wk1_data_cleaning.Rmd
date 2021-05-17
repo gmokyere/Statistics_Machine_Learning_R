@@ -40,20 +40,21 @@ get_info <-lapply(paste("Data", flist, sep = "/"), function(filename){
       nchars = lapply(all_lines, nchar)
       longest_line <- which.max(nchars) ## determine index of max
       
+      ## split based on one or more white spaces and find length
+      nwords <- sum(sapply(strsplit(all_lines, "\\s+"), length)) 
+      
       close(con)
-      return(c(filename, fsize, nlines, longest_line))
+      return(c(filename, fsize, nlines, longest_line, nwords))
 })
-
-
 
 ```
 
 ### Neatly convert list to dataframe and visualize
 
 ```{r df, echo=FALSE}
-df <- data.frame(matrix(unlist(get_info), nrow=length(get_info), byrow=T))
-colnames(df) <- c("file", "fsize", "num of lines", "longest line")
-df
+us_df <- data.frame(matrix(unlist(get_info), nrow=length(get_info), byrow=T))
+colnames(us_df) <- c("file", "fsize", "num_of_lines", "longest_line", "nwords")
+us_df
 ```
 
 4. In the en_US twitter data set, if you divide the number of lines where the word "love" (all lowercase) occurs by the number of lines the word "hate" (all lowercase) occurs, about what do you get?
@@ -89,6 +90,7 @@ tweet[biostats_idx]
 
 6. Question 6
 How many tweets have the exact characters "A computer once beat me at chess, but it was no match for me at kickboxing". (I.e. the line matches those characters exactly.)
+
 ```{r, cache=TRUE, warning=FALSE}
 ## open new connection after reading
 con_en_us_twitter <- file("Data/en_US/en_US.twitter.txt", "r")
@@ -100,6 +102,5 @@ idx <- grep("A computer once beat me at chess, but it was no match for me at kic
 close(con_en_us_twitter)
 
 tweet[idx]
-
  
 ```

@@ -1,0 +1,25 @@
+---
+title: "Leaflet"
+author: "Emmanuel Okyere Darko"
+date: "4/4/2021"
+output: html_document
+---
+
+Creating a web page using R Markdown that features a map created with Leaflet. 
+
+```{r, echo=FALSE}
+
+library(leaflet)
+my_map <- leaflet() %>% addTiles()
+#my_map %>% addMarkers(lat= 39.2980, lng = 76.589, popup = "Somewhere in the world")
+
+## Generate random gps coord of Ohio Univ where I currently live
+img_url = makeIcon("https://images.app.goo.gl/4yD9FwMFzohE7oc48")
+n = 10; mu_lat = 39.3;  mu_lng = -82; sd = 00.1
+x = rnorm(n, mu_lat, sd)
+y = rnorm(n, mu_lng, sd)
+my_map %>% addCircleMarkers(lat= x, lng = y, weight = 1, 
+                            radius = mtcars$mpg[1:n])
+
+```
+
