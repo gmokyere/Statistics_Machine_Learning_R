@@ -1,0 +1,11 @@
+name: myapp
+title:
+username:
+account: gmokyere
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3942533
+bundleId: 4457408
+url: https://gmokyere.shinyapps.io/myapp/
+when: 1618148160.35848
+lastSyncTime: 1618148160.3585

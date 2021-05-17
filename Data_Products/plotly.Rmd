@@ -1,0 +1,22 @@
+---
+title: "Plotly Presentation"
+author: "Emmanuel Okyere Darko"
+date: "4/9/2021"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+library(plotly)
+data("airmiles")
+```
+
+## Airmiles time series plot
+
+```{r cars, echo = F}
+#plot_ly(mtcars, x = ~wt, y = ~mpg,  type ="scatter", color = ~disp, size = ~hp, alpha = 0.6)
+
+
+plot_ly(x = ~time(airmiles), y = ~airmiles,type ="scatter", mode = "lines")
+```
+
+

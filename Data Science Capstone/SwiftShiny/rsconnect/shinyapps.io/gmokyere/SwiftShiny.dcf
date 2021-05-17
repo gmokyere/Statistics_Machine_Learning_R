@@ -1,0 +1,13 @@
+name: SwiftShiny
+title: SwiftShiny
+username:
+account: gmokyere
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4026306
+bundleId: 4515495
+url: https://gmokyere.shinyapps.io/SwiftShiny/
+when: 1619325074.06132
+lastSyncTime: 1619325074.06134
+asMultiple: FALSE
+asStatic: FALSE

@@ -1,0 +1,177 @@
+---
+title: "shiny"
+author: "Emmanuel Okyere Darko"
+date: "4/10/2021"
+output: ioslides_presentation
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(shiny)
+library(lubridate)
+```
+
+This R Markdown document is made interactive using Shiny. Unlike the more traditional workflow of creating static reports, you can now create documents that allow your readers to change the assumptions underlying your analysis and see the results immediately. 
+
+To learn more, see [Interactive Documents](http://rmarkdown.rstudio.com/authoring_shiny.html).
+
+## Inputs and Outputs
+
+You can embed Shiny inputs and outputs in your document. Outputs are automatically updated whenever inputs change.  This demonstrates how a standard R plot can be made interactive by wrapping it in the Shiny `renderPlot` function. The `selectInput` and `sliderInput` functions create the input widgets used to drive the plot.
+
+## Mtcars
+```{r mtcars, echo=FALSE}
+
+# Define UI for application that draws a histogram
+shinyApp(
+  ui = fluidPage(
+
+    # Application title
+    titlePanel("Mtcars Prediction with splines"),
+
+    # Sidebar with a slider input for number of bins
+    sidebarLayout(
+        sidebarPanel(
+            h3('Slide me'),
+            sliderInput("mpgSlider",
+                        "Choose MPG to predict:",
+                        min = 10,
+                        max = 40,
+                        value = 20),
+            
+            #numericInput('id1', 'numbers only', 5, 0, 50, step = 5),
+            
+            #dateInput('date', 'Enter Date'),
+            
+            checkboxInput('show_mod1', 'Show Model1', value = T),
+            checkboxInput('show_mod2', 'Show Model2', value = T),
+            checkboxInput('show_col', 'show groups', value = T),
+            
+            #submitButton('submit')
+            
+        ),
+
+        # Show a plot of the generated distribution
+        mainPanel(
+            
+            tabsetPanel(type = "tabs",
+                        tabPanel(title = "Tab1", br(), plotOutput("Plot"),
+                                 ),
+                        
+                        tabPanel(title = "Prediction", br(), 
+                                 h4("Model 1 Prediction"), textOutput("pred2"),
+                                 
+                                 h4("Model 2 prediction"), verbatimTextOutput('pred1')
+                        )
+                        )
+          
+        )
+    )
+),
+
+# Define server logic required to draw a histogram
+server = (function(input, output) {
+    
+    mtcars$mpg_spline <- ifelse(mtcars$mpg - 20> 0, mtcars$mpg -20, 0)
+    
+    fit.lm1 <- lm(hp~mpg, data = mtcars)
+    fit.lm2  <- lm(hp~mpg + mpg_spline, data = mtcars)
+    
+    lm1.pred <- reactive({
+        mpgInp <- input$mpgSlider
+        predict(fit.lm1, newdata = data.frame(mpg = mpgInp))
+    })
+    
+    lm2.pred <- reactive({
+        mpgInp <- input$mpgSlider
+        predict(fit.lm2, newdata = data.frame(mpg = mpgInp, 
+                                              mpg_spline = ifelse(mpgInp -20 >0, mpgInp -20, 0) 
+                                              )
+                )
+    })
+
+    output$Plot <- renderPlot({ 
+        mpgInp <- input$mpgSlider
+        with(mtcars, plot(mpg, hp, xlab = "MPG", ylab = "Horsepower",
+                          ylim = c(50,340), xlim = c(10,35) 
+                          )
+             )
+        
+        if(input$show_mod1){
+            abline(fit.lm1, col = "red", lwd = 2)
+        }
+        if(input$show_col){
+            with(mtcars, plot(mpg, hp, xlab = "MPG", ylab = "Horsepower", pch = 17,
+                              ylim = c(50,340), xlim = c(10,35), col = as.factor(mtcars$cyl)
+                              )
+    
+            )
+        }
+        if(input$show_mod2){
+            model2_splines <- predict(fit.lm2, 
+                                      newdata = data.frame(mpg = 10:35, 
+                                            mpg_spline = ifelse(10:35 -20 >0, 10:35 -20, 0)
+                                            )
+                                      )
+            
+        lines(10:35, model2_splines, col = 'blue', lwd = 2)
+        
+        }
+        
+        points(mpgInp, lm2.pred(), col = 'blue', pch = 16)
+        points(mpgInp, lm1.pred(), col = 'red', pch = 16)
+    })
+
+    output$pred1 <- renderText({
+        lm1.pred()
+        })
+    
+    output$pred2 <- renderText({lm2.pred()})
+    
+
+})
+)
+
+```
+
+## 
+```{r eruptions, echo=FALSE}
+inputPanel(
+  selectInput("n_breaks", label = "Number of bins:",
+              choices = c(10, 20, 35, 50), selected = 20),
+  
+  sliderInput("bw_adjust", label = "Bandwidth adjustment:",
+              min = 0.2, max = 2, value = 1, step = 0.2)
+)
+
+renderPlot({
+  hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
+       xlab = "Duration (minutes)", main = "Geyser eruption duration")
+  
+  dens <- density(faithful$eruptions, adjust = input$bw_adjust)
+  lines(dens, col = "blue")
+})
+```
+
+## Embedded Application
+
+It's also possible to embed an entire Shiny application within an R Markdown document using the `shinyAppDir` function. This example embeds a Shiny application located in another directory:
+
+```{r tabsets, echo=FALSE}
+shinyAppDir(
+  system.file("examples/06_tabsets", package = "shiny"),
+  options = list(
+    width = "100%", height = 550
+  )
+)
+```
+
+Note the use of the `height` parameter to determine how much vertical space the embedded application should occupy.
+
+You can also use the `shinyApp` function to define an application inline rather then in an external directory.
+
+In all of R code chunks above the `echo = FALSE` attribute is used. This is to prevent the R code within the chunk from rendering in the document alongside the Shiny components.
+
+
+
